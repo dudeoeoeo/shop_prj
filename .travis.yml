@@ -1,0 +1,59 @@
+language: java
+jdk:
+  - openjdk8
+
+branches:
+  only:
+    - master
+
+# Travis CI 서버의 Home
+cache:
+  directories:
+    - '$HOME/.m2/repository'
+    - '$HOME/.mvnw'
+
+# permission denied
+before_install:
+  - chmod +x mvnw # install 전 미리 실행 권한 추가
+
+# master 브랜치에 푸시되었을 때 수행하는 명령어
+script: "./mvnw clean build"
+
+before_deploy:
+  - mkdir -p shop-deploy # deploy 디렉토리를 Travis CI 가 실행중인 위치에서 생성
+  - cp scripts/*.sh shop-deploy/
+  - cp appspec.yml shop-deploy/
+  - cp build/libs/*.jar shop-deploy/
+  - cd shop-deploy && zip -r shop-deploy * # shop-deploy로 이동 후 전체 압축
+  - cd ../ && mkdir -p deploy
+  - mv shop-deploy/shop-deploy.zip deploy/springboot-shop-aws.zip
+
+deploy:
+  - provider: s3
+    access_key_id: $AWS_ACCESS_KEY
+    secret_access_key: $AWS_SECRET_KEY
+
+    bucket: freelec-springboot-build-prac #s3 burket
+    region: ap-northeast-2
+    skip_cleanup: true
+    acl: private # zip 파일 접근 private
+    local_dir: deploy # shop-deploy 에서 생성한 디렉토리
+    wait-until-deployed: true
+
+  - provider: codedeploy
+    access_key_id: $AWS_ACCESS_KEY
+    secret_access_key: $AWS_SECRET_KEY
+
+    bucket: freelec-springboot-build-prac
+    key: springboot-shop-aws.zip # 빌드 파일을 압축해서 전달
+    bundle_type: zip
+    application: springboot2-webservice # 웹 콘솔에서 등록한 CodeDeploy 애플리케이션
+    deployment_group: springboot2-webservice-group # 웹 콘솔에서 등록한 CodeDeploy 배포 그룹
+    region: ap-northeast-2
+    wait-until-deployed: true
+
+#CI 실행 완료 시 메일로 알람
+notifications:
+  email:
+    recipients:
+      - dudekekek@gmail.com
